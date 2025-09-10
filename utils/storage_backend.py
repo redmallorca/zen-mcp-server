@@ -243,6 +243,8 @@ class FileStorage:
                 return json.load(f)
         except (OSError, json.JSONDecodeError) as e:
             logger.warning(f"Failed to read file {file_path}: {e}")
+            # Clean up corrupted file immediately
+            self._safe_remove_file(file_path)
             return None
     
     def _safe_remove_file(self, file_path: Path) -> None:
