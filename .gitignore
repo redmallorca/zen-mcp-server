@@ -172,6 +172,10 @@ FEATURE_*.md
 # Temporary files
 /tmp/
 
+# Sensitive project memories and internal notes
+.serena/
+.serena/**
+
 # Local user instructions
 CLAUDE.local.md
 
