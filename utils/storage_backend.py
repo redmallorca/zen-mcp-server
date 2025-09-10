@@ -130,7 +130,9 @@ class FileStorage:
     def __init__(self, storage_dir: Optional[str] = None):
         # Configure storage directory
         if storage_dir is None:
-            storage_dir = os.getenv("ZEN_MCP_STORAGE_DIR", "/tmp/zen_mcp_threads")
+            # Use persistent location that survives reboots
+            default_dir = os.path.expanduser("~/.zen_mcp/threads")
+            storage_dir = os.getenv("ZEN_MCP_STORAGE_DIR", default_dir)
         self.storage_path = Path(storage_dir)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         

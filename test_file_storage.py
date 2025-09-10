@@ -169,7 +169,9 @@ else:
 
 def check_storage_directory():
     """Check if the storage directory exists and has files"""
-    storage_dir = os.getenv("ZEN_MCP_STORAGE_DIR", "/tmp/zen_mcp_threads")
+    # Match the same logic as FileStorage class
+    default_dir = os.path.expanduser("~/.zen_mcp/threads")
+    storage_dir = os.getenv("ZEN_MCP_STORAGE_DIR", default_dir)
     storage_path = Path(storage_dir)
     
     if storage_path.exists():
