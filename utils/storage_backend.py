@@ -28,6 +28,9 @@ import time
 from pathlib import Path
 from typing import Optional, Union
 
+# Sliding TTL configuration - when enabled, reading a thread extends its TTL
+CONVERSATION_SLIDING_TTL = os.getenv("CONVERSATION_SLIDING_TTL", "true").lower() == "true"
+
 # Try to import file locking for thread safety across processes
 try:
     import fcntl  # Unix/Linux/macOS file locking
@@ -58,8 +61,9 @@ class InMemoryStorage:
         self._cleanup_thread = threading.Thread(target=self._cleanup_worker, daemon=True)
         self._cleanup_thread.start()
 
+        sliding_status = "enabled" if CONVERSATION_SLIDING_TTL else "disabled"
         logger.info(
-            f"In-memory storage initialized with {timeout_hours}h timeout, cleanup every {self._cleanup_interval//60}m"
+            f"In-memory storage initialized with {timeout_hours}h timeout, cleanup every {self._cleanup_interval//60}m, sliding TTL {sliding_status}"
         )
 
     def set_with_ttl(self, key: str, ttl_seconds: int, value: str) -> None:
@@ -70,12 +74,22 @@ class InMemoryStorage:
             logger.debug(f"Stored key {key} with TTL {ttl_seconds}s")
 
     def get(self, key: str) -> Optional[str]:
-        """Retrieve value if not expired"""
+        """Retrieve value if not expired, with optional sliding TTL"""
         with self._lock:
             if key in self._store:
                 value, expires_at = self._store[key]
-                if time.time() < expires_at:
-                    logger.debug(f"Retrieved key {key}")
+                current_time = time.time()
+                if current_time < expires_at:
+                    # Apply sliding TTL if enabled
+                    if CONVERSATION_SLIDING_TTL:
+                        # Get timeout from environment to extend TTL
+                        timeout_hours = int(os.getenv("CONVERSATION_TIMEOUT_HOURS", "3"))
+                        ttl_seconds = timeout_hours * 3600
+                        new_expires_at = current_time + ttl_seconds
+                        self._store[key] = (value, new_expires_at)
+                        logger.debug(f"Retrieved key {key} and extended TTL by {timeout_hours}h (sliding TTL)")
+                    else:
+                        logger.debug(f"Retrieved key {key}")
                     return value
                 else:
                     # Clean up expired entry
@@ -123,8 +137,14 @@ class FileStorage:
     - Cross-process persistence (survives subprocess termination)
     - Thread-safe operations with file locking
     - TTL support with automatic cleanup
+    - Sliding TTL support (extends expiration on access)
     - Drop-in replacement for InMemoryStorage
     - Configurable storage directory
+    
+    Environment Variables:
+    - CONVERSATION_SLIDING_TTL: "true" (default) to enable sliding TTL
+    - CONVERSATION_TIMEOUT_HOURS: Hours for TTL (default: 3)
+    - ZEN_MCP_STORAGE_DIR: Custom storage directory
     """
     
     def __init__(self, storage_dir: Optional[str] = None):
@@ -145,8 +165,9 @@ class FileStorage:
         # Start background cleanup thread (singleton pattern to avoid multiple cleaners)
         self._start_cleanup_worker()
         
+        sliding_status = "enabled" if CONVERSATION_SLIDING_TTL else "disabled"
         logger.info(
-            f"File storage initialized at {self.storage_path} with {timeout_hours}h timeout, cleanup every {self._cleanup_interval//60}m"
+            f"File storage initialized at {self.storage_path} with {timeout_hours}h timeout, cleanup every {self._cleanup_interval//60}m, sliding TTL {sliding_status}"
         )
     
     def _start_cleanup_worker(self):
@@ -185,7 +206,7 @@ class FileStorage:
         logger.debug(f"Stored key {key} to file with TTL {ttl_seconds}s")
     
     def get(self, key: str) -> Optional[str]:
-        """Retrieve value if not expired"""
+        """Retrieve value if not expired, with optional sliding TTL"""
         file_path = self._get_file_path(key)
         
         if not file_path.exists():
@@ -197,8 +218,25 @@ class FileStorage:
                 return None
             
             # Check expiration
-            if time.time() < data.get("expires_at", 0):
-                logger.debug(f"Retrieved key {key} from file")
+            current_time = time.time()
+            if current_time < data.get("expires_at", 0):
+                # Apply sliding TTL if enabled
+                if CONVERSATION_SLIDING_TTL:
+                    # Get timeout from environment to extend TTL
+                    timeout_hours = int(os.getenv("CONVERSATION_TIMEOUT_HOURS", "3"))
+                    ttl_seconds = timeout_hours * 3600
+                    new_expires_at = current_time + ttl_seconds
+                    
+                    # Update the expires_at in the file
+                    data["expires_at"] = new_expires_at
+                    data["last_accessed_at"] = current_time
+                    
+                    # Write updated data back to file
+                    self._write_with_lock(file_path, data)
+                    logger.debug(f"Retrieved key {key} from file and extended TTL by {timeout_hours}h (sliding TTL)")
+                else:
+                    logger.debug(f"Retrieved key {key} from file")
+                    
                 return data.get("value")
             else:
                 # Expired - remove file
