@@ -4,6 +4,8 @@ Test per-tool model default selection functionality
 
 import json
 import os
+import shutil
+import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,6 +18,7 @@ from tools.debug import DebugIssueTool
 from tools.models import ToolModelCategory
 from tools.precommit import PrecommitTool
 from tools.shared.base_tool import BaseTool
+from tools.shared.exceptions import ToolExecutionError
 from tools.thinkdeep import ThinkDeepTool
 
 
@@ -90,13 +93,13 @@ class TestModelSelection:
             ModelProviderRegistry.unregister_provider(provider_type)
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
-            from providers.openai_provider import OpenAIModelProvider
+            from providers.openai import OpenAIModelProvider
 
             ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
 
             model = ModelProviderRegistry.get_preferred_fallback_model(ToolModelCategory.EXTENDED_REASONING)
-            # OpenAI prefers o3 for extended reasoning
-            assert model == "o3"
+            # OpenAI prefers GPT-5.1-Codex for extended reasoning (coding tasks)
+            assert model == "gpt-5.1-codex"
 
     def test_extended_reasoning_with_gemini_only(self):
         """Test EXTENDED_REASONING prefers pro when only Gemini is available."""
@@ -114,7 +117,7 @@ class TestModelSelection:
             model = ModelProviderRegistry.get_preferred_fallback_model(ToolModelCategory.EXTENDED_REASONING)
             # Gemini should return one of its models for extended reasoning
             # The default behavior may return flash when pro is not explicitly preferred
-            assert model in ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"]
+            assert model in ["gemini-3-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"]
 
     def test_fast_response_with_openai(self):
         """Test FAST_RESPONSE with OpenAI provider."""
@@ -125,13 +128,13 @@ class TestModelSelection:
             ModelProviderRegistry.unregister_provider(provider_type)
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
-            from providers.openai_provider import OpenAIModelProvider
+            from providers.openai import OpenAIModelProvider
 
             ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
 
             model = ModelProviderRegistry.get_preferred_fallback_model(ToolModelCategory.FAST_RESPONSE)
-            # OpenAI now prefers gpt-5 for fast response (based on our new preference order)
-            assert model == "gpt-5"
+            # OpenAI now prefers gpt-5.1 for fast response (based on our new preference order)
+            assert model == "gpt-5.1"
 
     def test_fast_response_with_gemini_only(self):
         """Test FAST_RESPONSE prefers flash when only Gemini is available."""
@@ -159,13 +162,13 @@ class TestModelSelection:
             ModelProviderRegistry.unregister_provider(provider_type)
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
-            from providers.openai_provider import OpenAIModelProvider
+            from providers.openai import OpenAIModelProvider
 
             ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
 
             model = ModelProviderRegistry.get_preferred_fallback_model(ToolModelCategory.BALANCED)
-            # OpenAI prefers gpt-5 for balanced (based on our new preference order)
-            assert model == "gpt-5"
+            # OpenAI prefers gpt-5.1 for balanced (based on our new preference order)
+            assert model == "gpt-5.1"
 
     def test_no_category_uses_balanced_logic(self):
         """Test that no category specified uses balanced logic."""
@@ -192,7 +195,7 @@ class TestFlexibleModelSelection:
                 "env": {"OPENAI_API_KEY": "test-key"},
                 "provider_type": ProviderType.OPENAI,
                 "category": ToolModelCategory.EXTENDED_REASONING,
-                "expected": "o3",
+                "expected": "gpt-5.1-codex",  # GPT-5.1-Codex prioritized for coding tasks
             },
             # Case 2: Gemini provider for fast response
             {
@@ -206,7 +209,7 @@ class TestFlexibleModelSelection:
                 "env": {"OPENAI_API_KEY": "test-key"},
                 "provider_type": ProviderType.OPENAI,
                 "category": ToolModelCategory.FAST_RESPONSE,
-                "expected": "gpt-5",  # Based on new preference order
+                "expected": "gpt-5.1",  # Based on new preference order
             },
         ]
 
@@ -220,7 +223,7 @@ class TestFlexibleModelSelection:
             with patch.dict(os.environ, case["env"], clear=False):
                 # Register the appropriate provider
                 if case["provider_type"] == ProviderType.OPENAI:
-                    from providers.openai_provider import OpenAIModelProvider
+                    from providers.openai import OpenAIModelProvider
 
                     ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
                 elif case["provider_type"] == ProviderType.GOOGLE:
@@ -290,11 +293,16 @@ class TestAutoModeErrorMessages:
                         mock_get_provider_for.return_value = None
 
                         tool = ChatTool()
-                        result = await tool.execute({"prompt": "test", "model": "auto"})
+                        temp_dir = tempfile.mkdtemp()
+                        try:
+                            with pytest.raises(ToolExecutionError) as exc_info:
+                                await tool.execute(
+                                    {"prompt": "test", "model": "auto", "working_directory_absolute_path": temp_dir}
+                                )
+                        finally:
+                            shutil.rmtree(temp_dir, ignore_errors=True)
 
-                        assert len(result) == 1
-                        # The SimpleTool will wrap the error message
-                        error_output = json.loads(result[0].text)
+                        error_output = json.loads(exc_info.value.payload)
                         assert error_output["status"] == "error"
                         assert "Model 'auto' is not available" in error_output["content"]
 
@@ -404,7 +412,6 @@ class TestRuntimeModelSelection:
                     }
                 )
 
-                # Should require model selection even though DEFAULT_MODEL is valid
                 assert len(result) == 1
                 assert "Model 'auto' is not available" in result[0].text
 
@@ -418,12 +425,17 @@ class TestRuntimeModelSelection:
                     mock_get_provider.return_value = None
 
                     tool = ChatTool()
-                    result = await tool.execute({"prompt": "test", "model": "gpt-5-turbo"})
+                    temp_dir = tempfile.mkdtemp()
+                    try:
+                        with pytest.raises(ToolExecutionError) as exc_info:
+                            await tool.execute(
+                                {"prompt": "test", "model": "gpt-5-turbo", "working_directory_absolute_path": temp_dir}
+                            )
+                    finally:
+                        shutil.rmtree(temp_dir, ignore_errors=True)
 
                     # Should require model selection
-                    assert len(result) == 1
-                    # When a specific model is requested but not available, error message is different
-                    error_output = json.loads(result[0].text)
+                    error_output = json.loads(exc_info.value.payload)
                     assert error_output["status"] == "error"
                     assert "gpt-5-turbo" in error_output["content"]
                     assert "is not available" in error_output["content"]
@@ -465,7 +477,7 @@ class TestSchemaGeneration:
                     tool = ThinkDeepTool()
                     schema = tool.get_input_schema()
 
-                    # Model should NOT be required
+                    # Model should remain optional when DEFAULT_MODEL is available
                     assert "model" not in schema["required"]
 
 
@@ -515,7 +527,11 @@ class TestUnavailableModelFallback:
                         mock_get_model_provider.return_value = mock_provider
 
                         tool = ChatTool()
-                        result = await tool.execute({"prompt": "test"})  # No model specified
+                        temp_dir = tempfile.mkdtemp()
+                        try:
+                            result = await tool.execute({"prompt": "test", "working_directory_absolute_path": temp_dir})
+                        finally:
+                            shutil.rmtree(temp_dir, ignore_errors=True)
 
                         # Should work normally, not require model parameter
                         assert len(result) == 1

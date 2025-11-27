@@ -82,11 +82,10 @@ security remediation plan using planner
 - `relevant_context`: Methods/functions/classes central to security findings
 - `issues_found`: Security issues identified with severity levels
 - `confidence`: Confidence level in security assessment completeness (exploring/low/medium/high/certain)
-- `backtrack_from_step`: Step number to backtrack from (for revisions)
 - `images`: Architecture diagrams, security documentation, or visual references
 
 **Initial Security Configuration (used in step 1):**
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `security_scope`: Application context, technology stack, and security boundary definition (required)
 - `threat_level`: low|medium|high|critical (default: medium) - determines assessment depth and urgency
 - `compliance_requirements`: List of compliance frameworks to assess against (e.g., ["PCI DSS", "SOC2"])
@@ -94,7 +93,6 @@ security remediation plan using planner
 - `severity_filter`: critical|high|medium|low|all (default: all)
 - `temperature`: Temperature for analytical consistency (0-1, default 0.2)
 - `thinking_mode`: minimal|low|medium|high|max (default: medium, Gemini only)
-- `use_websearch`: Enable web search for security best practices and vulnerability databases (default: true)
 - `use_assistant_model`: Whether to use expert security analysis phase (default: true)
 - `continuation_id`: Continue previous security audit discussions
 

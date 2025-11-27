@@ -59,7 +59,7 @@ to **Publish all Changes** was made after a rigorous set of prompts where it exa
 from different angles (performance, bugs, anti-patterns etc). After confirming that unit tests were 
 passing, it went ahead with an initial review with O3; came back clean - all good to go. O3 was happy, everything looked great.
 
-Then it shared the changes and relevant code with Gemini 2.5 Pro - the following is the outcome:
+Then it shared the changes and relevant code with Gemini 3.0 Pro - the following is the outcome:
 
 ```
 ⏺ zen:precommit (MCP)(step: "FINAL VALIDATION COMPLETE. All changes have been thoroughly analyzed and are ready for
@@ -85,7 +85,7 @@ Then it shared the changes and relevant code with Gemini 2.5 Pro - the following
 
 ⏺ 🔍 Pre-Commit Validation Complete
 
-  Based on comprehensive analysis using both O3 and Gemini 2.5 Pro models, I can provide the following assessment:
+  Based on comprehensive analysis using both O3 and Gemini 3.0 Pro models, I can provide the following assessment:
 
   ✅ APPROVED WITH CRITICAL FIX REQUIRED
 
@@ -94,8 +94,8 @@ Then it shared the changes and relevant code with Gemini 2.5 Pro - the following
 
   🚨 [HIGH PRIORITY] Critical Issue Found
 
-  Inconsistent Provider Handling in tools/base.py
-  - Location: tools/base.py line ~1833 in _create_continuation_offer_response method
+  Inconsistent Provider Handling in tools/shared/base_tool.py
+  - Location: tools/shared/base_tool.py inside _create_continuation_offer_response
   - Problem: The defensive provider handling pattern was applied in 2 locations but missed a 3rd location
   - Impact: Risk of AttributeError: 'str' object has no attribute 'get_provider_type' in continuation scenarios
   - Fix Required: Apply the same defensive pattern to the missed location
@@ -135,13 +135,12 @@ Use zen and perform a thorough precommit ensuring there aren't any new regressio
 - `relevant_context`: Methods/functions/classes affected by changes
 - `issues_found`: Issues identified with severity levels
 - `precommit_type`: Type of validation to perform (external/internal, default: external - ALWAYS use external unless explicitly told otherwise)
-- `backtrack_from_step`: Step number to backtrack from (for revisions)
 - `images`: Screenshots of requirements, design mockups for validation
 
 **Initial Configuration (used in step 1):**
 - `path`: Starting directory to search for repos (REQUIRED for step 1, must be absolute path)
 - `prompt`: The original user request description for the changes (required for context)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `compare_to`: Compare against a branch/tag instead of local changes (optional)
 - `severity_filter`: critical|high|medium|low|all (default: all)
 - `include_staged`: Include staged changes in the review (default: true)
@@ -149,7 +148,6 @@ Use zen and perform a thorough precommit ensuring there aren't any new regressio
 - `focus_on`: Specific aspects to focus on
 - `temperature`: Temperature for response (default: 0.2)
 - `thinking_mode`: minimal|low|medium|high|max (default: medium, Gemini only)
-- `use_websearch`: Enable web search for best practices (default: true)
 - `use_assistant_model`: Whether to use expert validation phase (default: true, set to false to use Claude only)
 - `continuation_id`: Continue previous validation discussions
 

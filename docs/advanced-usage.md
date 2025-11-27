@@ -33,7 +33,7 @@ Regardless of your default configuration, you can specify models per request:
 
 | Model | Provider | Context | Strengths | Auto Mode Usage |
 |-------|----------|---------|-----------|------------------|
-| **`pro`** (Gemini 2.5 Pro) | Google | 1M tokens | Extended thinking (up to 32K tokens), deep analysis | Complex architecture, security reviews, deep debugging |
+| **`pro`** (Gemini 3.0 Pro) | Google | 1M tokens | Extended thinking (up to 32K tokens), deep analysis | Complex architecture, security reviews, deep debugging |
 | **`flash`** (Gemini 2.5 Flash) | Google | 1M tokens | Ultra-fast responses with thinking | Quick checks, formatting, simple analysis |
 | **`flash-2.0`** (Gemini 2.0 Flash) | Google | 1M tokens | Latest fast model with audio/video support | Quick analysis with multimodal input |
 | **`flashlite`** (Gemini 2.0 Flash Lite) | Google | 1M tokens | Lightweight text-only model | Fast text processing without vision |
@@ -41,10 +41,13 @@ Regardless of your default configuration, you can specify models per request:
 | **`o3-mini`** | OpenAI | 200K tokens | Balanced speed/quality | Moderate complexity tasks |
 | **`o4-mini`** | OpenAI | 200K tokens | Latest reasoning model | Optimized for shorter contexts |
 | **`gpt4.1`** | OpenAI | 1M tokens | Latest GPT-4 with extended context | Large codebase analysis, comprehensive reviews |
+| **`gpt5.1`** (GPT-5.1) | OpenAI | 400K tokens | Flagship reasoning model with configurable thinking effort | Complex problems, balanced agent/coding flows |
+| **`gpt5.1-codex`** (GPT-5.1 Codex) | OpenAI | 400K tokens | Agentic coding specialization (Responses API) | Advanced coding tasks, structured code generation |
+| **`gpt5.1-codex-mini`** (GPT-5.1 Codex mini) | OpenAI | 400K tokens | Cost-efficient Codex variant with streaming | Balanced coding tasks, cost-conscious development |
 | **`gpt5`** (GPT-5) | OpenAI | 400K tokens | Advanced model with reasoning support | Complex problems requiring advanced reasoning |
 | **`gpt5-mini`** (GPT-5 Mini) | OpenAI | 400K tokens | Efficient variant with reasoning | Balanced performance and capability |
 | **`gpt5-nano`** (GPT-5 Nano) | OpenAI | 400K tokens | Fastest, cheapest GPT-5 variant | Summarization and classification tasks |
-| **`grok-4-latest`** | X.AI | 256K tokens | Latest flagship model with reasoning, vision | Complex analysis, reasoning tasks |
+| **`grok-4`** | X.AI | 256K tokens | Latest flagship Grok model with reasoning, vision | Complex analysis, reasoning tasks |
 | **`grok-3`** | X.AI | 131K tokens | Advanced reasoning model | Deep analysis, complex problems |
 | **`grok-3-fast`** | X.AI | 131K tokens | Higher performance variant | Fast responses with reasoning |
 | **`llama`** (Llama 3.2) | Custom/Local | 128K tokens | Local inference, privacy | On-device analysis, cost-free processing |
@@ -55,12 +58,16 @@ cloud models (expensive/powerful) AND local models (free/private) in the same co
 
 **Model Capabilities:**
 - **Gemini Models**: Support thinking modes (minimal to max), web search, 1M context
-  - **Pro 2.5**: Deep analysis with max 32K thinking tokens
+  - **Pro 3.0**: Deep analysis with max 32K thinking tokens
   - **Flash 2.5**: Ultra-fast with thinking support (24K thinking tokens)
   - **Flash 2.0**: Latest fast model with audio/video input (24K thinking tokens)
   - **Flash Lite 2.0**: Text-only lightweight model (no thinking support)
 - **O3/O4 Models**: Excellent reasoning, systematic analysis, 200K context
 - **GPT-4.1**: Extended context window (1M tokens), general capabilities
+- **GPT-5.1 Series**: Latest flagship reasoning models, 400K context
+  - **GPT-5.1**: Flagship model with configurable thinking effort and vision
+  - **GPT-5.1 Codex**: Agentic coding specialization (Responses API, non-streaming)
+  - **GPT-5.1 Codex mini**: Cost-efficient Codex variant with streaming support
 - **GPT-5 Series**: Advanced reasoning models, 400K context
   - **GPT-5**: Full-featured with reasoning support and vision
   - **GPT-5 Mini**: Balanced efficiency and capability
@@ -91,8 +98,8 @@ OPENAI_ALLOWED_MODELS=o3,o4-mini
 
 **Important Notes:**
 - Restrictions apply to all usage including auto mode
-- `OPENROUTER_ALLOWED_MODELS` only affects OpenRouter models accessed via custom provider (where `is_custom: false` in custom_models.json)
-- Custom local models (`is_custom: true`) are not affected by any restrictions
+- `OPENROUTER_ALLOWED_MODELS` only affects models defined in `conf/openrouter_models.json`
+- Custom local models (from `conf/custom_models.json`) are not affected by OpenRouter restrictions
 
 ## Thinking Modes
 
@@ -100,7 +107,7 @@ OPENAI_ALLOWED_MODELS=o3,o4-mini
 
 ### Thinking Modes & Token Budgets
 
-These only apply to models that support customizing token usage for extended thinking, such as Gemini 2.5 Pro.
+These only apply to models that support customizing token usage for extended thinking, such as Gemini 3.0 Pro.
 
 | Mode | Token Budget | Use Case | Cost Impact |
 |------|-------------|----------|-------------|
@@ -148,7 +155,7 @@ These only apply to models that support customizing token usage for extended thi
 # Complex debugging, letting claude pick the best model
 "Use zen to debug this race condition with max thinking mode"
 
-# Architecture analysis with Gemini 2.5 Pro
+# Architecture analysis with Gemini 3.0 Pro
 "Analyze the entire src/ directory architecture with high thinking using pro"
 ```
 
@@ -161,11 +168,11 @@ All tools that work with files support **both individual files and entire direct
 **`analyze`** - Analyze files or directories
 - `files`: List of file paths or directories (required)
 - `question`: What to analyze (required)  
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `analysis_type`: architecture|performance|security|quality|general
 - `output_format`: summary|detailed|actionable
 - `thinking_mode`: minimal|low|medium|high|max (default: medium, Gemini only)
-- `use_websearch`: Enable web search for documentation and best practices - allows model to request Claude perform searches (default: true)
+- **Web search capability**: The assistant now automatically requests web searches when it needs current documentation or best practices—no parameter required
 
 ```
 "Analyze the src/ directory for architectural patterns" (auto mode picks best model)
@@ -176,7 +183,7 @@ All tools that work with files support **both individual files and entire direct
 
 **`codereview`** - Review code files or directories
 - `files`: List of file paths or directories (required)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `review_type`: full|security|performance|quick
 - `focus_on`: Specific aspects to focus on
 - `standards`: Coding standards to enforce
@@ -192,13 +199,13 @@ All tools that work with files support **both individual files and entire direct
 
 **`debug`** - Debug with file context
 - `error_description`: Description of the issue (required)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `error_context`: Stack trace or logs
 - `files`: Files or directories related to the issue
 - `runtime_info`: Environment details
 - `previous_attempts`: What you've tried
 - `thinking_mode`: minimal|low|medium|high|max (default: medium, Gemini only)
-- `use_websearch`: Enable web search for error messages and solutions - allows model to request Claude perform searches (default: true)
+- **Web search capability**: Automatically initiates searches for relevant error messages or recent fixes when needed
 
 ```
 "Debug this logic error with context from backend/" (auto mode picks best model)
@@ -208,12 +215,12 @@ All tools that work with files support **both individual files and entire direct
 
 **`thinkdeep`** - Extended analysis with file context
 - `current_analysis`: Your current thinking (required)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `problem_context`: Additional context
 - `focus_areas`: Specific aspects to focus on
 - `files`: Files or directories for context
 - `thinking_mode`: minimal|low|medium|high|max (default: max, Gemini only)
-- `use_websearch`: Enable web search for documentation and insights - allows model to request Claude perform searches (default: true)
+- **Web search capability**: Automatically calls for research when architecture references or external insights are required
 
 ```
 "Think deeper about my design with reference to src/models/" (auto mode picks best model)
@@ -224,7 +231,7 @@ All tools that work with files support **both individual files and entire direct
 **`testgen`** - Comprehensive test generation with edge case coverage
 - `files`: Code files or directories to generate tests for (required)
 - `prompt`: Description of what to test, testing objectives, and scope (required)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `test_examples`: Optional existing test files as style/pattern reference
 - `thinking_mode`: minimal|low|medium|high|max (default: medium, Gemini only)
 
@@ -239,7 +246,7 @@ All tools that work with files support **both individual files and entire direct
 - `files`: Code files or directories to analyze for refactoring opportunities (required)
 - `prompt`: Description of refactoring goals, context, and specific areas of focus (required)
 - `refactor_type`: codesmells|decompose|modernize|organization (required)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `focus_areas`: Specific areas to focus on (e.g., 'performance', 'readability', 'maintainability', 'security')
 - `style_guide_examples`: Optional existing code files to use as style/pattern reference
 - `thinking_mode`: minimal|low|medium|high|max (default: medium, Gemini only)
@@ -339,7 +346,7 @@ To help choose the right tool for your needs:
 The Zen MCP server supports vision-capable models for analyzing images, diagrams, screenshots, and visual content. Vision support works seamlessly with all tools and conversation threading.
 
 **Supported Models:**
-- **Gemini 2.5 Pro & Flash**: Excellent for diagrams, architecture analysis, UI mockups (up to 20MB total)
+- **Gemini 3.0 Pro & Flash**: Excellent for diagrams, architecture analysis, UI mockups (up to 20MB total)
 - **OpenAI O3/O4 series**: Strong for visual debugging, error screenshots (up to 20MB total)
 - **Claude models via OpenRouter**: Good for code screenshots, visual analysis (up to 5MB total)
 - **Custom models**: Support varies by model, with 40MB maximum enforced for abuse prevention
@@ -395,11 +402,11 @@ User: "Use gemini to review this code: [50,000+ character detailed analysis]"
 Zen MCP: "The prompt is too large for MCP's token limits (>50,000 characters). 
 Please save the prompt text to a temporary file named 'prompt.txt' and resend 
 the request with an empty prompt string and the absolute file path included 
-in the files parameter, along with any other files you wish to share as context."
+in the absolute_file_paths parameter, along with any other files you wish to share as context."
 
 # Claude automatically handles this:
 - Saves your prompt to /tmp/prompt.txt
-- Resends: "Use gemini to review this code" with files=["/tmp/prompt.txt", "/path/to/code.py"]
+- Resends: "Use gemini to review this code" with absolute_file_paths=["/tmp/prompt.txt", "/path/to/code.py"]
 
 # Server processes the large prompt through Gemini's 1M context
 # Returns comprehensive analysis within MCP's response limits
@@ -444,7 +451,7 @@ Claude can then search for these specific topics and provide you with the most c
 **Web search control:**
 Web search is enabled by default, allowing models to request Claude perform searches for current documentation and solutions. If you prefer the model to work only with its training data, you can disable web search:
 ```
-"Use gemini to review this code with use_websearch false"
+"Use gemini to review this code and confirm whether any new framework changes affect the recommendation"
 ```
 
 ## System Prompts
@@ -452,9 +459,9 @@ Web search is enabled by default, allowing models to request Claude perform sear
 The server uses carefully crafted system prompts to give each tool specialized expertise:
 
 ### Prompt Architecture
-- **Centralized Prompts**: All system prompts are defined in `prompts/tool_prompts.py`
+- **Centralized Prompts**: Each tool's system prompt lives in `systemprompts/` (for example, `systemprompts/chat_prompt.py`)
 - **Tool Integration**: Each tool inherits from `BaseTool` and implements `get_system_prompt()`
-- **Prompt Flow**: `User Request → Tool Selection → System Prompt + Context → Gemini Response`
+- **Prompt Flow**: `User Request → Tool Selection → System Prompt + Context → Model Response`
 
 ### Specialized Expertise
 Each tool has a unique system prompt that defines its role and approach:
@@ -465,6 +472,6 @@ Each tool has a unique system prompt that defines its role and approach:
 
 ### Customization
 To modify tool behavior, you can:
-1. Edit prompts in `prompts/tool_prompts.py` for global changes
+1. Edit the prompt file in `systemprompts/` (and export it via `systemprompts/__init__.py`) for global changes
 2. Override `get_system_prompt()` in a tool class for tool-specific changes
 3. Use the `temperature` parameter to adjust response style (0.2 for focused, 0.7 for creative)

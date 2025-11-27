@@ -45,7 +45,7 @@ This workflow ensures methodical analysis before expert insights, resulting in d
 - **Cross-file relationship mapping**: Understand dependencies and interactions
 - **Architecture visualization**: Describe system structure and component relationships
 - **Image support**: Analyze architecture diagrams, UML charts, flowcharts: `"Analyze this system diagram with gemini to understand the data flow and identify bottlenecks"`
-- **Web search capability**: When enabled with `use_websearch` (default: true), the model can request Claude to perform web searches and share results back to enhance analysis with current documentation, design patterns, and best practices
+- **Web search capability**: Automatically requests Claude to perform web searches when fresh documentation, patterns, or best practices are needed, ensuring the analysis stays current
 
 ## Tool Parameters
 
@@ -60,17 +60,15 @@ This workflow ensures methodical analysis before expert insights, resulting in d
 - `relevant_context`: Methods/functions/classes central to analysis findings
 - `issues_found`: Issues or concerns identified with severity levels
 - `confidence`: Confidence level in analysis completeness (exploring/low/medium/high/certain)
-- `backtrack_from_step`: Step number to backtrack from (for revisions)
 - `images`: Visual references for analysis context
 
 **Initial Configuration (used in step 1):**
 - `prompt`: What to analyze or look for (required)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `analysis_type`: architecture|performance|security|quality|general (default: general)
 - `output_format`: summary|detailed|actionable (default: detailed)
 - `temperature`: Temperature for analysis (0-1, default 0.2)
 - `thinking_mode`: minimal|low|medium|high|max (default: medium, Gemini only)
-- `use_websearch`: Enable web search for documentation and best practices (default: true)
 - `use_assistant_model`: Whether to use expert analysis phase (default: true, set to false to use Claude only)
 - `continuation_id`: Continue previous analysis sessions
 

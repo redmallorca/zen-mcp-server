@@ -35,6 +35,14 @@ readonly DESKTOP_CONFIG_FLAG=".desktop_configured"
 readonly LOG_DIR="logs"
 readonly LOG_FILE="mcp_server.log"
 
+# Determine portable arguments for sed -i (GNU vs BSD)
+declare -a SED_INPLACE_ARGS
+if sed --version >/dev/null 2>&1; then
+    SED_INPLACE_ARGS=(-i)
+else
+    SED_INPLACE_ARGS=(-i "")
+fi
+
 # ----------------------------------------------------------------------------
 # Utility Functions
 # ----------------------------------------------------------------------------
@@ -1057,14 +1065,6 @@ setup_env_file() {
     cp .env.example .env
     print_success "Created .env from .env.example"
 
-    # Detect sed version for cross-platform compatibility
-    local sed_cmd
-    if sed --version >/dev/null 2>&1; then
-        sed_cmd="sed -i"  # GNU sed (Linux)
-    else
-        sed_cmd="sed -i ''"  # BSD sed (macOS)
-    fi
-
     # Update API keys from environment if present
     local api_keys=(
         "GEMINI_API_KEY:your_gemini_api_key_here"
@@ -1080,7 +1080,7 @@ setup_env_file() {
         local key_value="${!key_name:-}"
 
         if [[ -n "$key_value" ]]; then
-            $sed_cmd "s/$placeholder/$key_value/" .env
+            sed "${SED_INPLACE_ARGS[@]}" "s/$placeholder/$key_value/" .env
             print_success "Updated .env with $key_name from environment"
         fi
     done
@@ -1100,16 +1100,8 @@ migrate_env_file() {
     # Create backup
     cp .env .env.backup_$(date +%Y%m%d_%H%M%S)
 
-    # Detect sed version for cross-platform compatibility
-    local sed_cmd
-    if sed --version >/dev/null 2>&1; then
-        sed_cmd="sed -i"  # GNU sed (Linux)
-    else
-        sed_cmd="sed -i ''"  # BSD sed (macOS)
-    fi
-
     # Replace host.docker.internal with localhost
-    $sed_cmd 's/host\.docker\.internal/localhost/g' .env
+    sed "${SED_INPLACE_ARGS[@]}" 's/host\.docker\.internal/localhost/g' .env
 
     print_success "Migrated Docker URLs to localhost in .env"
     echo "  (Backup saved as .env.backup_*)"
@@ -1684,98 +1676,428 @@ EOF
 
 # Check and update Codex CLI configuration
 check_codex_cli_integration() {
-    # Check if Codex is installed
     if ! command -v codex &> /dev/null; then
-        # Codex CLI not installed
         return 0
     fi
 
     local codex_config="$HOME/.codex/config.toml"
-    
-    # Check if zen is already configured
+    local codex_has_zen=false
     if [[ -f "$codex_config" ]] && grep -q '\[mcp_servers\.zen\]' "$codex_config" 2>/dev/null; then
-        # Already configured
-        return 0
+        codex_has_zen=true
     fi
 
-    # Ask user if they want to add Zen to Codex CLI
-    echo ""
-    read -p "Configure Zen for Codex CLI? (Y/n): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
-        print_info "Skipping Codex CLI integration"
-        return 0
-    fi
-
-    print_info "Updating Codex CLI configuration..."
-
-    # Create config directory if it doesn't exist
-    mkdir -p "$(dirname "$codex_config")" 2>/dev/null || true
-
-    # Create backup if config exists
-    if [[ -f "$codex_config" ]]; then
-        cp "$codex_config" "${codex_config}.backup_$(date +%Y%m%d_%H%M%S)"
-    fi
-
-    # Get environment variables using shared function
-    local env_vars=$(parse_env_variables)
-
-    # Write zen configuration to config.toml
-    {
+    if [[ "$codex_has_zen" == false ]]; then
         echo ""
-        echo "[mcp_servers.zen]"
-        echo "command = \"bash\""
-        echo "args = [\"-c\", \"for p in \$(which uvx 2>/dev/null) \$HOME/.local/bin/uvx /opt/homebrew/bin/uvx /usr/local/bin/uvx uvx; do [ -x \\\"\$p\\\" ] && exec \\\"\$p\\\" --from git+https://github.com/BeehiveInnovations/zen-mcp-server.git zen-mcp-server; done; echo 'uvx not found' >&2; exit 1\"]"
+        read -p "Configure Zen for Codex CLI? (Y/n): " -n 1 -r
         echo ""
-        echo "[mcp_servers.zen.env]"
-        echo "PATH = \"/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:\$HOME/.local/bin:\$HOME/.cargo/bin:\$HOME/bin\""
-        if [[ -n "$env_vars" ]]; then
-            # Convert KEY=VALUE format to TOML KEY = "VALUE" format
-            while IFS= read -r line; do
-                if [[ -n "$line" && "$line" =~ ^([^=]+)=(.*)$ ]]; then
-                    local key="${BASH_REMATCH[1]}"
-                    local value="${BASH_REMATCH[2]}"
-                    # Escape backslashes first, then double quotes for TOML compatibility
-                    local escaped_value
-                    escaped_value=$(echo "$value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
-                    echo "$key = \"$escaped_value\""
-                fi
-            done <<< "$env_vars"
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            print_info "Skipping Codex CLI integration"
+            return 0
         fi
-    } >> "$codex_config"
 
-    if [[ $? -eq 0 ]]; then
-        print_success "Successfully configured Codex CLI"
-        echo "  Config: $codex_config"
-        echo "  Restart Codex CLI to use Zen MCP Server"
-    else
-        print_error "Failed to update Codex CLI config"
-        echo "Manual config location: $codex_config"
-        echo "Add this configuration:"
-        
-        # Generate example with actual environment variables for error case
-        env_vars=$(parse_env_variables)
-        cat << EOF
+        print_info "Updating Codex CLI configuration..."
+
+        mkdir -p "$(dirname "$codex_config")" 2>/dev/null || true
+
+        if [[ -f "$codex_config" ]]; then
+            cp "$codex_config" "${codex_config}.backup_$(date +%Y%m%d_%H%M%S)"
+        fi
+
+        local env_vars=$(parse_env_variables)
+
+        {
+            echo ""
+            echo "[mcp_servers.zen]"
+            echo "command = \"bash\""
+            echo "args = [\"-c\", \"for p in \$(which uvx 2>/dev/null) \$HOME/.local/bin/uvx /opt/homebrew/bin/uvx /usr/local/bin/uvx uvx; do [ -x \\\"\$p\\\" ] && exec \\\"\$p\\\" --from git+https://github.com/BeehiveInnovations/zen-mcp-server.git zen-mcp-server; done; echo 'uvx not found' >&2; exit 1\"]"
+            echo "tool_timeout_sec = 1200"
+            echo ""
+            echo "[mcp_servers.zen.env]"
+            echo "PATH = \"/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:\$HOME/.local/bin:\$HOME/.cargo/bin:\$HOME/bin\""
+            if [[ -n "$env_vars" ]]; then
+                while IFS= read -r line; do
+                    if [[ -n "$line" && "$line" =~ ^([^=]+)=(.*)$ ]]; then
+                        local key="${BASH_REMATCH[1]}"
+                        local value="${BASH_REMATCH[2]}"
+                        local escaped_value
+                        escaped_value=$(echo "$value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+                        echo "$key = \"$escaped_value\""
+                    fi
+                done <<< "$env_vars"
+            fi
+        } >> "$codex_config"
+
+        if [[ $? -ne 0 ]]; then
+            print_error "Failed to update Codex CLI config"
+            echo "Manual config location: $codex_config"
+            echo "Add this configuration:"
+cat <<'CODExEOF'
 [mcp_servers.zen]
 command = "sh"
 args = ["-c", "exec \$(which uvx 2>/dev/null || echo uvx) --from git+https://github.com/BeehiveInnovations/zen-mcp-server.git zen-mcp-server"]
+tool_timeout_sec = 1200
 
 [mcp_servers.zen.env]
 PATH = "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:\$HOME/.local/bin:\$HOME/.cargo/bin:\$HOME/bin"
-EOF
-        
-        # Add environment variable examples only if they exist
-        if [[ -n "$env_vars" ]]; then
-            while IFS= read -r line; do
-                if [[ -n "$line" && "$line" =~ ^([^=]+)=(.*)$ ]]; then
-                    local key="${BASH_REMATCH[1]}"
-                    echo "${key} = \"your_$(echo "${key}" | tr '[:upper:]' '[:lower:]')\""
-                fi
-            done <<< "$env_vars"
-        else
-            # Show GEMINI_API_KEY example if no environment variables exist
-            echo "GEMINI_API_KEY = \"your_gemini_api_key_here\""
+
+[features]
+web_search_request = true
+CODExEOF
+
+            if [[ -n "$env_vars" ]]; then
+                while IFS= read -r line; do
+                    if [[ -n "$line" && "$line" =~ ^([^=]+)=(.*)$ ]]; then
+                        local key="${BASH_REMATCH[1]}"
+                        echo "${key} = \"your_$(echo "${key}" | tr '[:upper:]' '[:lower:]')\""
+                    fi
+                done <<< "$env_vars"
+            else
+                echo "GEMINI_API_KEY = \"your_gemini_api_key_here\""
+            fi
+            return 0
         fi
+
+        print_success "Successfully configured Codex CLI"
+        echo "  Config: $codex_config"
+        echo "  Restart Codex CLI to use Zen MCP Server"
+        codex_has_zen=true
+    else
+        print_info "Codex CLI already configured; refreshing Codex settings..."
+    fi
+
+    if [[ "$codex_has_zen" == true ]]; then
+        if ! grep -Eq '^\s*web_search_request\s*=' "$codex_config" 2>/dev/null; then
+            echo ""
+            print_info "Web search requests let Codex pull fresh documentation for Zen's API lookup tooling."
+            read -p "Enable Codex CLI web search requests? (Y/n): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                if grep -Eq '^\s*\[features\]' "$codex_config" 2>/dev/null; then
+                    if ! python3 - "$codex_config" <<'PY'
+import sys
+from pathlib import Path
+
+cfg_path = Path(sys.argv[1])
+content = cfg_path.read_text().splitlines()
+output = []
+in_features = False
+added = False
+
+for line in content:
+    stripped = line.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        if in_features and not added:
+            output.append("web_search_request = true")
+            added = True
+        in_features = stripped == "[features]"
+        output.append(line)
+        continue
+    if in_features and stripped.startswith("web_search_request"):
+        added = True
+    output.append(line)
+
+if in_features and not added:
+    output.append("web_search_request = true")
+
+cfg_path.write_text("\n".join(output) + "\n")
+PY
+                    then
+                        print_error "Failed to enable Codex web search request feature. Add 'web_search_request = true' under [features] in $codex_config manually."
+                    else
+                        print_success "Enabled Codex web search request feature"
+                    fi
+                else
+                    {
+                        echo ""
+                        echo "[features]"
+                        echo "web_search_request = true"
+                    } >> "$codex_config" && print_success "Enabled Codex web search request feature" || \
+                        print_error "Failed to enable Codex web search request feature. Add 'web_search_request = true' under [features] in $codex_config manually."
+                fi
+            else
+                print_info "Skipping Codex web search request feature"
+            fi
+        fi
+
+        if grep -Eq '^\s*\[tools\]' "$codex_config" 2>/dev/null && \
+           grep -Eq '^\s*web_search\s*=' "$codex_config" 2>/dev/null; then
+            local removal_status
+            if removal_status=$(python3 - "$codex_config" <<'PY' | tr -d '\n'
+import sys
+from pathlib import Path
+
+cfg_path = Path(sys.argv[1])
+lines = cfg_path.read_text().splitlines()
+output = []
+in_tools = False
+removed = False
+
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith('[') and stripped.endswith(']'):
+        in_tools = stripped == '[tools]'
+        output.append(line)
+        continue
+    if in_tools and stripped.startswith('web_search'):
+        removed = True
+        continue
+    output.append(line)
+
+if removed:
+    cfg_path.write_text("\n".join(output) + "\n")
+    print('REMOVED', end='')
+else:
+    print('UNCHANGED', end='')
+PY
+); then
+                if [[ "$removal_status" == "REMOVED" ]]; then
+                    print_success "Removed deprecated Codex [tools].web_search entry"
+                fi
+            else
+                print_warning "Failed to clean up deprecated Codex [tools].web_search entry; remove manually from $codex_config"
+            fi
+        fi
+    fi
+}
+
+# Print manual Qwen CLI configuration guidance
+print_qwen_manual_instructions() {
+    local python_cmd="$1"
+    local server_path="$2"
+    local script_dir="$3"
+    local config_path="$4"
+    local env_lines="$5"
+
+    local env_array=()
+    if [[ -n "$env_lines" ]]; then
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            env_array+=("$line")
+        done <<< "$env_lines"
+    fi
+
+    echo "Manual config location: $config_path"
+    echo "Add or update this entry:"
+
+    local env_block=""
+    if [[ ${#env_array[@]} -gt 0 ]]; then
+        env_block=$'      "env": {\n'
+        local first=true
+        for env_entry in "${env_array[@]}"; do
+            local key="${env_entry%%=*}"
+            local value="${env_entry#*=}"
+            value=${value//\\/\\\\}
+            value=${value//"/\\"}
+            if [[ "$first" == true ]]; then
+                first=false
+                env_block+="        \"$key\": \"$value\""
+            else
+                env_block+=$',\n        '
+                env_block+="\"$key\": \"$value\""
+            fi
+        done
+        env_block+=$'\n      }'
+    fi
+
+    if [[ -n "$env_block" ]]; then
+        cat << EOF
+{
+  "mcpServers": {
+    "zen": {
+      "command": "$python_cmd",
+      "args": ["$server_path"],
+      "cwd": "$script_dir",
+$env_block
+    }
+  }
+}
+EOF
+    else
+        cat << EOF
+{
+  "mcpServers": {
+    "zen": {
+      "command": "$python_cmd",
+      "args": ["$server_path"],
+      "cwd": "$script_dir"
+    }
+  }
+}
+EOF
+    fi
+}
+
+# Check and update Qwen Code CLI configuration
+check_qwen_cli_integration() {
+    local python_cmd="$1"
+    local server_path="$2"
+
+    if ! command -v qwen &> /dev/null; then
+        return 0
+    fi
+
+    local qwen_config="$HOME/.qwen/settings.json"
+    local script_dir
+    script_dir=$(dirname "$server_path")
+
+    local env_vars
+    env_vars=$(parse_env_variables)
+    local env_array=()
+    if [[ -n "$env_vars" ]]; then
+        while IFS= read -r line; do
+            if [[ -n "$line" && "$line" =~ ^([^=]+)=(.*)$ ]]; then
+                env_array+=("${BASH_REMATCH[1]}=${BASH_REMATCH[2]}")
+            fi
+        done <<< "$env_vars"
+    fi
+
+    local env_lines=""
+    if [[ ${#env_array[@]} -gt 0 ]]; then
+        env_lines=$(printf '%s\n' "${env_array[@]}")
+    fi
+
+    local config_status=3
+    if [[ -f "$qwen_config" ]]; then
+        if python3 - "$qwen_config" "$python_cmd" "$server_path" "$script_dir" <<'PYCONF'
+import json
+import sys
+
+config_path, expected_cmd, expected_arg, expected_cwd = sys.argv[1:5]
+try:
+    with open(config_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+except FileNotFoundError:
+    sys.exit(1)
+except Exception:
+    sys.exit(5)
+
+servers = data.get('mcpServers')
+if not isinstance(servers, dict):
+    sys.exit(3)
+
+config = servers.get('zen')
+if not isinstance(config, dict):
+    sys.exit(3)
+
+cmd = config.get('command')
+args = config.get('args') or []
+cwd = config.get('cwd')
+
+cwd_matches = cwd in (None, "", expected_cwd)
+if cmd == expected_cmd and len(args) == 1 and args[0] == expected_arg and cwd_matches:
+    sys.exit(0)
+
+sys.exit(4)
+PYCONF
+        then
+            config_status=0
+        else
+            config_status=$?
+            if [[ $config_status -eq 1 ]]; then
+                config_status=3
+            fi
+        fi
+    fi
+
+    if [[ $config_status -eq 0 ]]; then
+        return 0
+    fi
+
+    echo ""
+
+    if [[ $config_status -eq 4 ]]; then
+        print_warning "Found existing Qwen CLI zen configuration with different settings."
+    elif [[ $config_status -eq 5 ]]; then
+        print_warning "Unable to parse Qwen CLI settings; replacing with a fresh entry may help."
+    fi
+
+    local prompt="Configure Zen for Qwen CLI? (Y/n): "
+    if [[ $config_status -eq 4 || $config_status -eq 5 ]]; then
+        prompt="Update Qwen CLI zen configuration? (Y/n): "
+    fi
+
+    read -p "$prompt" -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        print_info "Skipping Qwen CLI integration"
+        print_qwen_manual_instructions "$python_cmd" "$server_path" "$script_dir" "$qwen_config" "$env_lines"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$qwen_config")" 2>/dev/null || true
+    if [[ -f "$qwen_config" && $config_status -ne 3 ]]; then
+        cp "$qwen_config" "${qwen_config}.backup_$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
+    fi
+
+    local update_output
+    local update_status=0
+    update_output=$(ZEN_QWEN_ENV="$env_lines" ZEN_QWEN_CMD="$python_cmd" ZEN_QWEN_ARG="$server_path" ZEN_QWEN_CWD="$script_dir" python3 - "$qwen_config" <<'PYUPDATE'
+import json
+import os
+import pathlib
+import sys
+
+config_path = pathlib.Path(sys.argv[1])
+cmd = os.environ['ZEN_QWEN_CMD']
+arg = os.environ['ZEN_QWEN_ARG']
+cwd = os.environ['ZEN_QWEN_CWD']
+env_lines = os.environ.get('ZEN_QWEN_ENV', '').splitlines()
+
+env_map = {}
+for line in env_lines:
+    if not line.strip():
+        continue
+    if '=' in line:
+        key, value = line.split('=', 1)
+        env_map[key] = value
+
+if config_path.exists():
+    try:
+        with config_path.open('r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+else:
+    data = {}
+
+if not isinstance(data, dict):
+    data = {}
+
+servers = data.get('mcpServers')
+if not isinstance(servers, dict):
+    servers = {}
+    data['mcpServers'] = servers
+
+zen_config = {
+    'command': cmd,
+    'args': [arg],
+    'cwd': cwd,
+}
+
+if env_map:
+    zen_config['env'] = env_map
+
+servers['zen'] = zen_config
+
+config_path.parent.mkdir(parents=True, exist_ok=True)
+tmp_path = config_path.with_suffix(config_path.suffix + '.tmp')
+with tmp_path.open('w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+tmp_path.replace(config_path)
+PYUPDATE
+    ) || update_status=$?
+
+    if [[ $update_status -eq 0 ]]; then
+        print_success "Successfully configured Qwen CLI"
+        echo "  Config: $qwen_config"
+        echo "  Restart Qwen CLI to use Zen MCP Server"
+    else
+        print_error "Failed to update Qwen CLI config"
+        if [[ -n "$update_output" ]]; then
+            echo "$update_output"
+        fi
+        print_qwen_manual_instructions "$python_cmd" "$server_path" "$script_dir" "$qwen_config" "$env_lines"
     fi
 }
 
@@ -1792,7 +2114,7 @@ display_config_instructions() {
     echo "===== $config_header ====="
     printf '%*s\n' "$((${#config_header} + 12))" | tr ' ' '='
     echo ""
-    echo "To use Zen MCP Server with your Claude clients:"
+    echo "To use Zen MCP Server with your CLI clients:"
     echo ""
 
     print_info "1. For Claude Code (CLI):"
@@ -1833,19 +2155,34 @@ display_config_instructions() {
         done <<< "$env_vars"
     fi
     
-    cat << EOF
+    if [[ -n "$example_env" ]]; then
+        cat << EOF
    {
      "mcpServers": {
        "zen": {
          "command": "$python_cmd",
-         "args": ["$server_path"]$(if [[ -n "$example_env" ]]; then echo ","; fi)$(if [[ -n "$example_env" ]]; then echo "
-         \"env\": {
+         "args": ["$server_path"],
+         "cwd": "$script_dir",
+         "env": {
 $(echo -e "$example_env")
-         }"; fi)
+         }
        }
      }
    }
 EOF
+    else
+        cat << EOF
+   {
+     "mcpServers": {
+       "zen": {
+         "command": "$python_cmd",
+         "args": ["$server_path"],
+         "cwd": "$script_dir"
+       }
+     }
+   }
+EOF
+    fi
 
     # Show platform-specific config location
     local config_path=$(get_claude_config_path)
@@ -1871,6 +2208,39 @@ EOF
      }
    }
 EOF
+    echo ""
+
+    print_info "For Qwen Code CLI:"
+    echo "   Add this configuration to ~/.qwen/settings.json:"
+    echo ""
+    if [[ -n "$example_env" ]]; then
+        cat << EOF
+   {
+     "mcpServers": {
+       "zen": {
+         "command": "$python_cmd",
+         "args": ["$server_path"],
+         "cwd": "$script_dir",
+         "env": {
+$(echo -e "$example_env")
+         }
+       }
+     }
+   }
+EOF
+    else
+        cat << EOF
+   {
+     "mcpServers": {
+       "zen": {
+         "command": "$python_cmd",
+         "args": ["$server_path"],
+         "cwd": "$script_dir"
+       }
+     }
+   }
+EOF
+    fi
     echo ""
 
     print_info "For Codex CLI:"
@@ -2131,12 +2501,15 @@ main() {
     # Step 11: Check Codex CLI integration
     check_codex_cli_integration
 
-    # Step 12: Display log information
+    # Step 12: Check Qwen CLI integration
+    check_qwen_cli_integration "$python_cmd" "$server_path"
+
+    # Step 13: Display log information
     echo ""
     echo "Logs will be written to: $script_dir/$LOG_DIR/$LOG_FILE"
     echo ""
 
-    # Step 13: Handle command line arguments
+    # Step 14: Handle command line arguments
     if [[ "$arg" == "-f" ]] || [[ "$arg" == "--follow" ]]; then
         follow_logs
     else
@@ -2152,5 +2525,6 @@ main() {
 # Script Entry Point
 # ----------------------------------------------------------------------------
 
-# Run main function with all arguments
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

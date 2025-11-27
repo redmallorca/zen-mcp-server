@@ -25,19 +25,18 @@ with the best architecture for my project
 - **File reference support**: `"Use gemini to think deeper about my API design with reference to api/routes.py"`
 - **Image support**: Analyze architectural diagrams, flowcharts, design mockups: `"Think deeper about this system architecture diagram with gemini pro using max thinking mode"`
 - **Enhanced Critical Evaluation (v2.10.0)**: After Gemini's analysis, Claude is prompted to critically evaluate the suggestions, consider context and constraints, identify risks, and synthesize a final recommendation - ensuring a balanced, well-considered solution
-- **Web search capability**: When enabled (default: true), identifies areas where current documentation or community solutions would strengthen the analysis and suggests specific searches for Claude
+- **Web search capability**: Automatically identifies areas where current documentation or community solutions would strengthen the analysis and instructs Claude to perform targeted searches
 
 ## Tool Parameters
 
 - `prompt`: Your current thinking/analysis to extend and validate (required)
-- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5|gpt5-mini|gpt5-nano (default: server default)
+- `model`: auto|pro|flash|flash-2.0|flashlite|o3|o3-mini|o4-mini|gpt4.1|gpt5.1|gpt5.1-codex|gpt5.1-codex-mini|gpt5|gpt5-mini|gpt5-nano (default: server default)
 - `problem_context`: Additional context about the problem or goal
 - `focus_areas`: Specific aspects to focus on (architecture, performance, security, etc.)
 - `files`: Optional file paths or directories for additional context (absolute paths)
 - `images`: Optional images for visual analysis (absolute paths)
 - `temperature`: Temperature for creative thinking (0-1, default 0.7)
 - `thinking_mode`: minimal|low|medium|high|max (default: high, Gemini only)
-- `use_websearch`: Enable web search for documentation and insights (default: true)
 - `continuation_id`: Continue previous conversations
 
 ## Usage Examples
